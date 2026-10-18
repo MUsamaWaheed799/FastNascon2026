@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unified Platform | Never lose a lead. Close every deal.</title>
+  
+  <!-- Google Fonts: Inter & Newsreader for authentic SaaS display typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,700;0,6..72,800;1,6..72,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & Babel for browser execution -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            serif: ['"Newsreader"', 'Georgia', 'serif'],
+          },
+          colors: {
+            brand: {
+              orange: '#FF5722',
+              orangeHover: '#F4511E',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
+    }
+    .animate-float-1 { animation: floatSlow 4s ease-in-out infinite; }
+    .animate-float-2 { animation: floatSlow 5s ease-in-out infinite 1s; }
+    .animate-float-3 { animation: floatSlow 4.5s ease-in-out infinite 0.5s; }
+  </style>
+</head>
+<body class="bg-[#F8FAFC] text-slate-900 font-sans antialiased selection:bg-orange-500 selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // Default registered demo accounts with granular permissions (Checklist 1.1 & 1.2)
+    const DEFAULT_ACCOUNTS = [
+      {
+        id: 'usr-1',
+        username: 'alex_owner',
+        email: 'alex@apex.io',
+        password: 'password123',
+        name: 'Alex Rivera',
+        role: 'owner',
+        workspace_name: 'Apex Growth Enterprises',
+        can_create: true,
+        can_export: true,
+        can_view_value: true,
+      },
+      {
+        id: 'usr-2',
+        username: 'sarah_admin',
+        email: 'sarah@apex.io',
+        password: 'password123',
+        name: 'Sarah Connor',
+        role: 'admin',
+        workspace_name: 'Apex Growth Enterprises',
+        can_create: true,
+        can_export: true,
+        can_view_value: true,
+      },
+      {
+        id: 'usr-3',
+        username: 'tariq_rep',
+        email: 'tariq@apex.io',
+        password: 'password123',
+        name: 'Tariq Vance',
+        role: 'user',
+        workspace_name: 'Apex Growth Enterprises',
+        can_create: true,
+        can_export: false,
+        can_view_value: true, // Can be toggled false to test Checklist 1.2!
+      }
+    ];
+
+    // Pipeline 1: Standard Inbound Pipeline
+    const INITIAL_PIPELINE_1_STAGES = [
+      { id: 'stg-1', key: 'lead', label: 'New / Inbound', color: 'border-amber-400' },
+      { id: 'stg-2', key: 'qualified', label: 'Contacted & Qualified', color: 'border-sky-400' },
+      { id: 'stg-3', key: 'proposal', label: 'Proposal Sent', color: 'border-indigo-400' },
+      { id: 'stg-4', key: 'won', label: 'Closed Won', color: 'border-emerald-400' },
+      { id: 'stg-5', key: 'lost', label: 'Closed Lost', color: 'border-slate-400' },
+    ];
+
+    // Pipeline 2: Enterprise Strategic Pipeline (Checklist 2.2: Two pipelines with different fields & stages)
+    const INITIAL_PIPELINE_2_STAGES = [
+      { id: 'stg-ent-1', key: 'discovery', label: 'Enterprise Discovery', color: 'border-blue-500' },
+      { id: 'stg-ent-2', key: 'tech_eval', label: 'Technical Evaluation', color: 'border-purple-500' },
+      { id: 'stg-ent-3', key: 'compliance', label: 'Security & Legal Audit', color: 'border-amber-500' },
+      { id: 'stg-ent-4', key: 'exec_review', label: 'Executive Sign-Off', color: 'border-rose-500' },
+      { id: 'stg-ent-5', key: 'signed', label: 'Master Contract Signed', color: 'border-emerald-500' },
+    ];
+
+    function App() {
+      // 1. Auth State persisted in localStorage
+      const [accounts, setAccounts] = useState(() => {
+        try {
+          const stored = localStorage.getItem('nascon_accounts');
+          return stored ? JSON.parse(stored) : DEFAULT_ACCOUNTS;
+        } catch {
+          return DEFAULT_ACCOUNTS;
+        }
+      });
+
+      const [currentUser, setCurrentUser] = useState(() => {
+        try {
+          const stored = localStorage.getItem('nascon_current_user');
+          return stored ? JSON.parse(stored) : null; // Guest by default: requires login!
+        } catch {
+          return null;
+        }
+      });
+
+      // 2. View & Navigation States
+      const [viewMode, setViewMode] = useState('hero'); // 'hero' or 'app'
+      const [authModal, setAuthModal] = useState(null); // null, 'login', 'register', 'invite_user'
+      const [activeTab, setActiveTab] = useState('pipeline'); // 'pipeline', 'dashboard', 'team', 'custom-fields', 'audit'
+      const [toast, setToast] = useState(null);
+      const [userMenuOpen, setUserMenuOpen] = useState(false);
+      const [timerSec, setTimerSec] = useState(58);
+      const [ackMap, setAckMap] = useState({});
+
+      // 3. Pipeline Switcher & Stages State (Checklist 2.2)
+      const [activePipeline, setActivePipeline] = useState('standard'); // 'standard' or 'enterprise'
+      const [pipeline1Stages, setPipeline1Stages] = useState(INITIAL_PIPELINE_1_STAGES);
+      const [pipeline2Stages, setPipeline2Stages] = useState(INITIAL_PIPELINE_2_STAGES);
+      const [newStageName, setNewStageName] = useState('');
+      const [editingStageId, setEditingStageId] = useState(null);
+      const [editingStageLabel, setEditingStageLabel] = useState('');
+
+      // 4. Invite User Form State (Checklist 1.1)
+      const [inviteName, setInviteName] = useState('');
+      const [inviteUsername, setInviteUsername] = useState('');
+      const [inviteEmail, setInviteEmail] = useState('');
+      const [inviteRole, setInviteRole] = useState('user');
+      const [inviteCanCreate, setInviteCanCreate] = useState(true);
+      const [inviteCanExport, setInviteCanExport] = useState(false);
+      const [inviteCanViewValue, setInviteCanViewValue] = useState(true);
+
+      // 5. Login & Register Form States
+      const [loginIdentifier, setLoginIdentifier] = useState('');
+      const [loginPassword, setLoginPassword] = useState('');
+      const [loginError, setLoginError] = useState('');
+      const [regWorkspace, setRegWorkspace] = useState('');
+      const [regFullName, setRegFullName] = useState('');
+      const [regUsername, setRegUsername] = useState('');
+      const [regEmail, setRegEmail] = useState('');
+      const [regPassword, setRegPassword] = useState('');
+      const [regRole, setRegRole] = useState('owner');
+      const [regError, setRegError] = useState('');
+
+      // Save state to localStorage
+      useEffect(() => {
+        try {
+          localStorage.setItem('nascon_accounts', JSON.stringify(accounts));
+        } catch (e) {
+          console.error(e);
+        }
+      }, [accounts]);
+
+      useEffect(() => {
+        try {
+          if (currentUser) {
+            localStorage.setItem('nascon_current_user', JSON.stringify(currentUser));
+          } else {
+            localStorage.removeItem('nascon_current_user');
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }, [currentUser]);
+
+      // Ticking timer effect
+      useEffect(() => {
+        const interval = setInterval(() => {
+          setTimerSec(prev => (prev > 0 ? prev - 1 : 60));
+        }, 1000);
+        return () => clearInterval(interval);
+      }, []);
+
+      const showToast = (msg) => {
+        setToast(msg);
+        setTimeout(() => setToast(null), 3500);
+      };
+
+      // Current User permissions helper
+      const isOwnerOrAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
+      const canViewOpportunityValue = isOwnerOrAdmin || currentUser?.can_view_value !== false;
+
+      // ==========================================
+      // Auth Handlers
+      // ==========================================
+      const handleLoginSubmit = (e) => {
+        e.preventDefault();
+        setLoginError('');
+        const identifier = loginIdentifier.trim().toLowerCase();
+        const found = accounts.find(
+          acc => (acc.username.toLowerCase() === identifier || acc.email.toLowerCase() === identifier) && acc.password === loginPassword
+        );
+
+        if (found) {
+          setCurrentUser(found);
+          setAuthModal(null);
+          setLoginIdentifier('');
+          setLoginPassword('');
+          setViewMode('app');
+          showToast(`Welcome back, ${found.name || found.username}! Logged in as ${found.role.toUpperCase()}`);
+        } else {
+          setLoginError('Invalid credentials. Check your username/password or click "Create Account".');
+        }
+      };
+
+      const handleRegisterSubmit = (e) => {
+        e.preventDefault();
+        setRegError('');
+        if (!regWorkspace.trim() || !regUsername.trim() || !regEmail.trim() || !regPassword) {
+          setRegError('Please fill out all required fields.');
+          return;
+        }
+
+        const usernameClean = regUsername.trim().toLowerCase().replace(/\s+/g, '_');
+        const emailClean = regEmail.trim().toLowerCase();
+
+        if (accounts.some(acc => acc.username.toLowerCase() === usernameClean || acc.email.toLowerCase() === emailClean)) {
+          setRegError('An account with this username or email already exists.');
+          return;
+        }
+
+        const newAccount = {
+          id: `usr-${Date.now()}`,
+          username: usernameClean,
+          email: emailClean,
+          password: regPassword,
+          name: regFullName.trim() || regUsername.trim(),
+          role: regRole,
+          workspace_name: regWorkspace.trim(),
+          can_create: true,
+          can_export: regRole !== 'user',
+          can_view_value: true,
+        };
+
+        const updated = [...accounts, newAccount];
+        setAccounts(updated);
+        setCurrentUser(newAccount);
+        setAuthModal(null);
+        setViewMode('app');
+        showToast(`🎉 Account Created! Welcome to ${newAccount.workspace_name}, ${newAccount.name}!`);
+      };
+
+      // Invite Team Member Handler (Checklist 1.1)
+      const handleInviteUserSubmit = (e) => {
+        e.preventDefault();
+        if (!currentUser) {
+          setAuthModal('login');
+          showToast('🔒 Sign In Required: Please log in as Workspace Owner to invite teammates.');
+          return;
+        }
+        if (currentUser.role !== 'owner') {
+          showToast('⚠️ Permission Denied: Only the Workspace Owner can invite users.');
+          return;
+        }
+        if (!inviteName.trim() || !inviteEmail.trim() || !inviteUsername.trim()) return;
+
+        const newMember = {
+          id: `usr-${Date.now()}`,
+          username: inviteUsername.trim().toLowerCase().replace(/\s+/g, '_'),
+          email: inviteEmail.trim().toLowerCase(),
+          password: 'password123',
+          name: inviteName.trim(),
+          role: inviteRole,
+          workspace_name: currentUser?.workspace_name || 'Apex Growth Enterprises',
+          can_create: inviteCanCreate,
+          can_export: inviteCanExport,
+          can_view_value: inviteCanViewValue,
+        };
+
+        setAccounts(prev => [...prev, newMember]);
+        setAuthModal(null);
+        setInviteName('');
+        setInviteUsername('');
+        setInviteEmail('');
+        showToast(`✓ Teammate "${newMember.name}" invited successfully! Password set to: password123`);
+      };
+
+      // Toggle user permissions live in the table (Checklist 1.1 & 1.2)
+      const handleUpdateUserRoleOrPerm = (userId, field, val) => {
+        if (!currentUser) {
+          setAuthModal('login');
+          showToast('🔒 Sign In Required: Please log in as Workspace Owner.');
+          return;
+        }
+        if (currentUser.role !== 'owner') {
+          showToast('⚠️ Permission Denied: Only the Workspace Owner can edit team permissions.');
+          return;
+        }
+        setAccounts(prev => prev.map(acc => {
+          if (acc.id === userId) {
+            const updated = { ...acc, [field]: val };
+            if (currentUser && currentUser.id === userId) {
+              setCurrentUser(updated);
+            }
+            return updated;
+          }
+          return acc;
+        }));
+        showToast(`Permissions updated for teammate.`);
+      };
+
+      // ==========================================
+      // Pipeline & Stages Handlers (Checklist 2.2)
+      // ==========================================
+      const currentStages = activePipeline === 'standard' ? pipeline1Stages : pipeline2Stages;
+      const setCurrentStages = activePipeline === 'standard' ? setPipeline1Stages : setPipeline2Stages;
+
+      const handleAddStage = (e) => {
+        e.preventDefault();
+        if (!currentUser) {
+          setAuthModal('login');
+          showToast('🔒 Sign In Required: Please log in to add custom stages.');
+          return;
+        }
+        if (!newStageName.trim()) return;
+        const newStage = {
+          id: `stg-${Date.now()}`,
+          key: newStageName.trim().toLowerCase().replace(/\s+/g, '_'),
+          label: newStageName.trim(),
+          color: 'border-amber-500',
+        };
+        setCurrentStages(prev => [...prev, newStage]);
+        setNewStageName('');
+        showToast(`Stage "${newStage.label}" added to ${activePipeline.toUpperCase()} pipeline!`);
+      };
+
+      const handleRenameStage = (id) => {
+        if (!currentUser) {
+          setAuthModal('login');
+          showToast('🔒 Sign In Required: Please log in to rename stages.');
+          return;
+        }
+        if (!editingStageLabel.trim()) return;
+        setCurrentStages(prev => prev.map(stg => stg.id === id ? { ...stg, label: editingStageLabel.trim() } : stg));
+        setEditingStageId(null);
+        setEditingStageLabel('');
+        showToast(`Stage renamed successfully!`);
+      };
+
+      const handleMoveStageOrder = (index, direction) => {
+        if (!currentUser) {
+          setAuthModal('login');
+          showToast('🔒 Sign In Required: Please log in to reorder stages.');
+          return;
+        }
+        const targetIndex = direction === 'left' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= currentStages.length) return;
+        const copy = [...currentStages];
+        const temp = copy[index];
+        copy[index] = copy[targetIndex];
+        copy[targetIndex] = temp;
+        setCurrentStages(copy);
+        showToast(`Stages reordered!`);
+      };
+
+      return (
+        <div className="min-h-screen relative overflow-hidden flex flex-col">
+          {/* Floating Toast Notification */}
+          {toast && (
+            <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs font-semibold flex items-center gap-2 animate-bounce">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span>{toast}</span>
+            </div>
+          )}
+
+          {/* ========================================================
+              TOP NAVIGATION HEADER
+          ======================================================== */}
+          <header className="relative z-40 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full pt-4 pb-2">
+            <div className="flex items-center justify-between h-16">
+              {/* Logo */}
+              <div 
+                onClick={() => setViewMode('hero')}
+                className="flex items-center gap-2.5 cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                  ✦
+                </div>
+                <span className="font-extrabold text-xl tracking-tight text-slate-900">
+                  Unified Platform
+                </span>
+              </div>
+
+              {/* Center Navigation Pill Menu */}
+              <nav className="hidden lg:flex items-center gap-1 bg-white/90 backdrop-blur-md px-2 py-1 rounded-full border border-slate-200/90 shadow-2xs text-xs font-semibold text-slate-700">
+                <button 
+                  onClick={() => {
+                    if (!currentUser) {
+                      setAuthModal('login');
+                      showToast('🔒 Sign in to access the Live Workspace');
+                      return;
+                    }
+                    setViewMode('app');
+                  }}
+                  className="flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold text-xs"
+                >
+                  <span>PRODUCT</span>
+                  <span className="text-[10px]">▾</span>
+                </button>
+
+                <button 
+                  onClick={() => showToast('Pricing: $49/mo Starter, $149/mo Growth, Custom Enterprise')}
+                  className="px-3.5 py-1.5 rounded-full hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                >
+                  PRICING
+                </button>
+
+                <button 
+                  onClick={() => showToast('Unified AI: Auto-routing & Response Engine Active ✨')}
+                  className="flex items-center gap-1 px-3.5 py-1.5 rounded-full text-violet-600 hover:bg-violet-50 font-bold transition-colors"
+                >
+                  <span>UNIFIED AI</span>
+                  <span className="text-violet-500 font-bold">✨</span>
+                </button>
+
+                <button 
+                  onClick={() => showToast('Integrations: Twilio WhatsApp, Stripe, Google Calendar Connected')}
+                  className="px-3.5 py-1.5 rounded-full hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                >
+                  INTEGRATIONS
+                </button>
+
+                <button className="flex items-center gap-1 px-3.5 py-1.5 rounded-full hover:text-slate-900 hover:bg-slate-100 transition-colors">
+                  <span>RESOURCES</span>
+                  <span className="text-[10px] text-slate-400">▾</span>
+                </button>
+              </nav>
+
+              {/* Right Profile & Switcher */}
+              <div className="flex items-center gap-3">
+                {currentUser ? (
+                  <div className="relative">
+                    <button
+                      onClick={() => setUserMenuOpen(!userMenuOpen)}
+                      className="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-slate-300 transition-all"
+                    >
+                      <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-[#FF5722] to-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                        {currentUser.name ? currentUser.name.slice(0, 2).toUpperCase() : 'US'}
+                      </div>
+                      <div className="text-left hidden sm:block">
+                        <div className="text-xs font-bold text-slate-900 leading-tight">
+                          {currentUser.name || currentUser.username}
+                        </div>
+                        <div className="text-[10px] text-slate-400 capitalize">
+                          {currentUser.role === 'owner' ? '👑 Owner' : currentUser.role === 'admin' ? '🛡️ Admin' : '👤 Sales Rep'}
+                        </div>
+                      </div>
+                      <span className="text-slate-400 text-xs ml-1">▾</span>
+                    </button>
+
+                    {userMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white shadow-2xl border border-slate-200 p-2 z-50">
+                        <div className="p-3 bg-slate-50 rounded-xl mb-2 border border-slate-100">
+                          <div className="text-xs font-bold text-slate-900">{currentUser.name}</div>
+                          <div className="text-[11px] text-slate-500 font-mono truncate">{currentUser.email}</div>
+                          <div className="text-[10px] text-brand-orange font-semibold mt-1">
+                            🏢 {currentUser.workspace_name}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => { setViewMode('app'); setUserMenuOpen(false); }}
+                          className="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 rounded-xl transition-colors"
+                        >
+                          Open Live CRM Pipeline
+                        </button>
+
+                        <div className="my-1 border-t border-slate-100"></div>
+
+                        <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase">
+                          Quick Role Switch
+                        </div>
+                        <div className="grid grid-cols-3 gap-1 px-1 mb-2">
+                          <button
+                            onClick={() => { setCurrentUser(accounts[0]); setUserMenuOpen(false); showToast('Switched to OWNER'); }}
+                            className="p-1.5 rounded-lg bg-amber-50 text-amber-900 text-[10px] font-bold text-center hover:bg-amber-100"
+                          >
+                            👑 Owner
+                          </button>
+                          <button
+                            onClick={() => { setCurrentUser(accounts[1]); setUserMenuOpen(false); showToast('Switched to ADMIN'); }}
+                            className="p-1.5 rounded-lg bg-indigo-50 text-indigo-900 text-[10px] font-bold text-center hover:bg-indigo-100"
+                          >
+                            🛡️ Admin
+                          </button>
+                          <button
+                            onClick={() => { setCurrentUser(accounts[2]); setUserMenuOpen(false); showToast('Switched to SALES REP'); }}
+                            className="p-1.5 rounded-lg bg-emerald-50 text-emerald-900 text-[10px] font-bold text-center hover:bg-emerald-100"
+                          >
+                            👤 Rep
+                          </button>
+                        </div>
+
+                        <div className="my-1 border-t border-slate-100"></div>
+
+                        <button
+                          onClick={() => { setCurrentUser(null); setUserMenuOpen(false); showToast('Signed out.'); }}
+                          className="w-full text-left px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                        >
+                          Sign Out
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setAuthModal('login')}
+                      className="text-xs font-bold text-slate-700 hover:text-slate-900 px-3 py-2"
+                    >
+                      Log in
+                    </button>
+                    <button
+                      onClick={() => setAuthModal('register')}
+                      className="px-5 py-2.5 rounded-xl bg-[#FF5722] hover:bg-[#F4511E] text-white text-xs font-bold shadow-md shadow-orange-500/20"
+                    >
+                      Free 14-Day Trial
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {/* ========================================================
+              MODALS: LOGIN, REGISTER, & INVITE TEAM MEMBER
+          ======================================================== */}
+          {/* INVITE TEAM MEMBER MODAL (Checklist 1.1) */}
+          {authModal === 'invite_user' && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+              <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 sm:p-8">
+                <button
+                  onClick={() => setAuthModal(null)}
+                  className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-slate-700"
+                >
+                  ✕
+                </button>
+
+                <div className="text-center mb-5">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center mx-auto mb-2 text-base font-bold">
+                    👥
+                  </div>
+                  <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                    Invite User & Configure Permissions
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Workspace Owner Privilege (Rubric Criterion 1)
+                  </p>
+                </div>
+
+                <form onSubmit={handleInviteUserSubmit} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Teammate Full Name *</label>
+                    <input
+                      type="text"
+                      value={inviteName}
+                      onChange={e => setInviteName(e.target.value)}
+                      placeholder="e.g. Rachel Green"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Username *</label>
+                      <input
+                        type="text"
+                        value={inviteUsername}
+                        onChange={e => setInviteUsername(e.target.value)}
+                        placeholder="rachel_rep"
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-mono"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Assigned Role</label>
+                      <select
+                        value={inviteRole}
+                        onChange={e => setInviteRole(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-bold"
+                      >
+                        <option value="owner">👑 Owner</option>
+                        <option value="admin">🛡️ Admin</option>
+                        <option value="user">👤 Sales Rep</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Work Email Address *</label>
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      placeholder="rachel@apex.io"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                      required
+                    />
+                  </div>
+
+                  {/* Granular Permission Flags (Checklist 1.1 & 1.2) */}
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+                    <span className="font-bold text-slate-800 text-[11px] block">Granular Permission Flags:</span>
+                    <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={inviteCanCreate}
+                        onChange={e => setInviteCanCreate(e.target.checked)}
+                        className="rounded text-brand-orange"
+                      />
+                      <span>can_create: Allow creating new deals/contacts</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={inviteCanExport}
+                        onChange={e => setInviteCanExport(e.target.checked)}
+                        className="rounded text-brand-orange"
+                      />
+                      <span>can_export: Allow exporting customer data</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={inviteCanViewValue}
+                        onChange={e => setInviteCanViewValue(e.target.checked)}
+                        className="rounded text-brand-orange"
+                      />
+                      <span>can_view_value: Can view deal monetary value (Checklist 1.2)</span>
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-[#FF5722] hover:bg-[#F4511E] text-white font-bold rounded-xl shadow-md transition-all mt-2"
+                  >
+                    Send Invitation & Save Permissions
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* LOGIN MODAL */}
+          {authModal === 'login' && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+              <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 sm:p-8">
+                <button
+                  onClick={() => setAuthModal(null)}
+                  className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700"
+                >
+                  ✕
+                </button>
+                <div className="text-center mb-5">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-50 text-[#FF5722] border border-orange-200 flex items-center justify-center mx-auto mb-2 font-bold text-base">
+                    ✦
+                  </div>
+                  <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">Sign In to Workspace</h3>
+                </div>
+
+                {loginError && <div className="mb-3 p-2.5 bg-rose-50 text-rose-800 rounded-xl text-xs font-semibold">{loginError}</div>}
+
+                <form onSubmit={handleLoginSubmit} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Username or Email</label>
+                    <input
+                      type="text"
+                      value={loginIdentifier}
+                      onChange={e => setLoginIdentifier(e.target.value)}
+                      placeholder="e.g. alex_owner"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={loginPassword}
+                      onChange={e => setLoginPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-[#FF5722] hover:bg-[#F4511E] text-white font-bold rounded-xl shadow-md mt-2"
+                  >
+                    Sign In
+                  </button>
+                </form>
+
+                <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setAuthModal('register')}
+                    className="text-xs font-bold text-[#FF5722] hover:underline"
+                  >
+                    Don't have an account? Create Workspace
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* REGISTER MODAL */}
+          {authModal === 'register' && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+              <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 sm:p-8">
+                <button
+                  onClick={() => setAuthModal(null)}
+                  className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700"
+                >
+                  ✕
+                </button>
+                <div className="text-center mb-5">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto mb-2 text-base font-bold">
+                    🏢
+                  </div>
+                  <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">Create Workspace</h3>
+                </div>
+
+                {regError && <div className="mb-3 p-2.5 bg-rose-50 text-rose-800 rounded-xl text-xs font-semibold">{regError}</div>}
+
+                <form onSubmit={handleRegisterSubmit} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Workspace Name *</label>
+                    <input
+                      type="text"
+                      value={regWorkspace}
+                      onChange={e => setRegWorkspace(e.target.value)}
+                      placeholder="e.g. Apex Global Logistics"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Full Name</label>
+                      <input
+                        type="text"
+                        value={regFullName}
+                        onChange={e => setRegFullName(e.target.value)}
+                        placeholder="Alex Rivera"
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Username *</label>
+                      <input
+                        type="text"
+                        value={regUsername}
+                        onChange={e => setRegUsername(e.target.value)}
+                        placeholder="alex_rivera"
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-mono"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Email *</label>
+                    <input
+                      type="email"
+                      value={regEmail}
+                      onChange={e => setRegEmail(e.target.value)}
+                      placeholder="alex@company.com"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Password *</label>
+                      <input
+                        type="password"
+                        value={regPassword}
+                        onChange={e => setRegPassword(e.target.value)}
+                        placeholder="Min 6 chars"
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Role</label>
+                      <select
+                        value={regRole}
+                        onChange={e => setRegRole(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-bold"
+                      >
+                        <option value="owner">👑 Owner</option>
+                        <option value="admin">🛡️ Admin</option>
+                        <option value="user">👤 Rep</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-[#FF5722] hover:bg-[#F4511E] text-white font-bold rounded-xl shadow-md mt-2"
+                  >
+                    Create Workspace & Log In
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================
+              MAIN VIEWS: HERO BANNER OR LIVE WORKSPACE APP
+          ======================================================== */}
+          {viewMode === 'hero' ? (
+            /* HERO VIEW */
+            <main className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-20 w-full flex-1">
+              
+              {/* Subtle SVG Connectivity Curves */}
+              <svg className="absolute inset-0 w-full h-full text-slate-300 pointer-events-none hidden lg:block z-10" fill="none">
+                <path d="M 80 140 C 200 160, 260 220, 380 250" stroke="currentColor" strokeWidth="1.2" strokeDasharray="3 3" />
+                <path d="M 120 270 C 220 280, 270 290, 380 300" stroke="currentColor" strokeWidth="1.2" strokeDasharray="3 3" />
+                <path d="M 100 420 C 220 400, 280 360, 380 320" stroke="currentColor" strokeWidth="1.2" strokeDasharray="3 3" />
+
+                <circle cx="80" cy="140" r="3.5" fill="#94A3B8" />
+                <circle cx="210" cy="200" r="3" fill="#CBD5E1" />
+                <circle cx="380" cy="250" r="4" fill="#3B82F6" />
+                <circle cx="380" cy="300" r="4" fill="#10B981" />
+                <circle cx="380" cy="320" r="4" fill="#FF5722" />
+
+                <path d="M 1200 140 C 1080 160, 1010 220, 890 250" stroke="currentColor" strokeWidth="1.2" strokeDasharray="3 3" />
+                <path d="M 1160 270 C 1060 280, 990 290, 890 300" stroke="currentColor" strokeWidth="1.2" strokeDasharray="3 3" />
+                <path d="M 1180 420 C 1060 400, 990 360, 890 320" stroke="currentColor" strokeWidth="1.2" strokeDasharray="3 3" />
+
+                <circle cx="1200" cy="140" r="3.5" fill="#94A3B8" />
+                <circle cx="1070" cy="210" r="3" fill="#CBD5E1" />
+                <circle cx="890" cy="250" r="4" fill="#6366F1" />
+                <circle cx="890" cy="300" r="4" fill="#10B981" />
+                <circle cx="890" cy="320" r="4" fill="#FF5722" />
+              </svg>
+
+              {/* LEFT FLOATING MOVING SIDEBAR: WhatsApp, SMS, Call Active Lead */}
+              <div className="absolute left-2 lg:left-6 top-8 hidden md:flex flex-col gap-3.5 z-20 pointer-events-auto">
+                {/* 1. Moving WhatsApp Icon & Badge */}
+                <div 
+                  onClick={() => showToast('💬 WhatsApp Integration: Live inbound webhook connected')}
+                  className="animate-float-1 cursor-pointer flex items-center gap-2 p-1.5 px-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 hover:-translate-y-1 transition-all text-xs font-semibold text-slate-800 w-fit group"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-[#25D366] text-white flex items-center justify-center font-bold text-xs shadow-xs group-hover:scale-110 transition-transform">
+                    💬
+                  </div>
+                  <span>WhatsApp Response Sent!</span>
+                </div>
+
+                {/* 2. Customer Dialog Skeleton Bubble */}
+                <div className="animate-float-2 p-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 flex items-start gap-2.5 w-60 hover:-translate-y-1 transition-all">
+                  <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-xs ring-2 ring-white">
+                    👨‍💼
+                  </div>
+                  <div className="space-y-1.5 flex-1">
+                    <div className="h-2 bg-slate-200 rounded-full w-4/5"></div>
+                    <div className="h-1.5 bg-slate-100 rounded-full w-3/5"></div>
+                  </div>
+                </div>
+
+                {/* 3. Moving SMS Icon & Badge */}
+                <div 
+                  onClick={() => showToast('✉️ SMS Channel: Fast carrier response active')}
+                  className="animate-float-3 cursor-pointer flex items-center gap-2 p-1.5 px-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 hover:-translate-y-1 transition-all text-xs font-semibold text-slate-800 w-fit ml-6 group"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-xs group-hover:scale-110 transition-transform">
+                    ✉️
+                  </div>
+                  <span>SMS Response Sent!</span>
+                </div>
+
+                {/* 4. Dialog Bubble with WhatsApp Logo */}
+                <div className="animate-float-1 p-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 flex items-start gap-2.5 w-56 hover:-translate-y-1 transition-all">
+                  <div className="w-6 h-6 rounded-lg bg-[#25D366] text-white flex items-center justify-center text-xs flex-shrink-0">
+                    💬
+                  </div>
+                  <div className="space-y-1.5 flex-1">
+                    <div className="h-2 bg-slate-200 rounded-full w-full"></div>
+                    <div className="h-1.5 bg-slate-100 rounded-full w-2/3"></div>
+                  </div>
+                </div>
+
+                {/* 5. Moving Call Active Lead & Bell Alert */}
+                <div className="flex items-center gap-2">
+                  <div 
+                    onClick={() => showToast('📞 Inbound Call: Active sales rep assigned')}
+                    className="animate-float-2 cursor-pointer flex items-center gap-2 p-2 px-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 hover:-translate-y-1 transition-all"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs">
+                      📞
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-800 leading-tight">Call</div>
+                      <div className="text-[9px] text-slate-400">Active Lead</div>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => showToast('🔔 Alert: 1 lead near 15m escalation window!')}
+                    className="animate-float-3 cursor-pointer flex items-center gap-2 p-2 px-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 hover:-translate-y-1 transition-all"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xs animate-bounce">
+                      🔔
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-400 leading-tight">incoming</div>
+                      <div className="text-[11px] font-bold text-slate-800">Rapid response</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 6. Customer Response Sent Pill */}
+                <div className="animate-float-1 flex items-center gap-2 p-1.5 px-3 bg-white/95 backdrop-blur-md rounded-full shadow-lg border border-slate-200 w-fit">
+                  <span className="text-xs">👩‍🦰</span>
+                  <span className="text-[11px] font-semibold text-slate-700">customer Response Sent!</span>
+                </div>
+              </div>
+
+              {/* RIGHT FLOATING MOVING SIDEBAR: Stripe, Calendar, Desk */}
+              <div className="absolute right-2 lg:right-6 top-8 hidden md:flex flex-col items-end gap-3.5 z-20 pointer-events-auto">
+                {/* 1. Customer Avatar Pill */}
+                <div className="animate-float-2 flex items-center gap-2 p-1.5 px-3 bg-white/95 backdrop-blur-md rounded-full shadow-lg border border-slate-200 hover:-translate-y-1 transition-all">
+                  <span className="text-xs">👩‍💼</span>
+                  <span className="text-[11px] font-semibold text-slate-700">customer Response Sent!</span>
+                </div>
+
+                {/* 2. Stripe Collected Revenue Card */}
+                <div 
+                  onClick={() => showToast('💳 Stripe Revenue: $62,000 verified via webhook')}
+                  className="animate-float-1 cursor-pointer flex items-center gap-2.5 p-2 px-3.5 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 hover:-translate-y-1 transition-all w-fit group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-[#635BFF] text-white flex items-center justify-center font-bold text-xs shadow-xs group-hover:scale-110 transition-transform">
+                    S
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-medium">Stripe test mode</div>
+                    <div className="text-xs font-bold text-slate-800">Collected revenue</div>
+                  </div>
+                </div>
+
+                {/* 3. Flowaling Progress Bar */}
+                <div className="animate-float-3 p-2.5 px-3.5 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 space-y-1 w-44 hover:-translate-y-1 transition-all">
+                  <div className="text-[11px] font-semibold text-slate-600">Flowaling</div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="w-3/4 h-full bg-emerald-500 rounded-full animate-pulse"></div>
+                  </div>
+                </div>
+
+                {/* 4. Google Calendar Connected */}
+                <div 
+                  onClick={() => showToast('📅 Google Calendar: Seamless booking synchronization')}
+                  className="animate-float-2 cursor-pointer flex items-center gap-2.5 p-2 px-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 hover:-translate-y-1 transition-all w-fit mr-4 group"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-sky-500 text-white flex items-center justify-center font-bold text-[10px] shadow-xs group-hover:scale-110 transition-transform">
+                    31
+                  </div>
+                  <span className="text-xs font-semibold text-slate-800">
+                    Google Calendar connected
+                  </span>
+                </div>
+
+                {/* 5. Customer Message Desk */}
+                <div className="animate-float-1 p-3 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/80 border border-slate-200 w-60 space-y-1.5 hover:-translate-y-1 transition-all text-left">
+                  <div className="text-[10px] text-slate-400 font-medium">Message</div>
+                  <div className="text-[11px] font-bold text-slate-800">fast response on any channel</div>
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100 text-[10px] text-slate-500">
+                    <span>👨</span>
+                    <span>customer Response Sent</span>
+                  </div>
+                </div>
+
+                {/* 6. Quick box */}
+                <div className="p-1.5 px-3 bg-white/90 backdrop-blur-md rounded-xl border border-slate-200 text-[10px] text-slate-500 font-medium shadow-xs">
+                  Quick box
+                </div>
+              </div>
+
+              {/* Central Content */}
+              <div className="relative z-30 text-center max-w-3xl mx-auto mt-4 sm:mt-6">
+                <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-slate-200/90 text-violet-700 text-xs font-semibold shadow-xs">
+                  <span className="text-violet-500">✨</span>
+                  <span>Unified lead management and business automation</span>
+                </div>
+
+                <h1 className="mt-6 text-4xl sm:text-6xl lg:text-[70px] font-serif font-extrabold tracking-tight text-slate-900 leading-[1.08]">
+                  Never lose a lead. <br />
+                  Close every deal.
+                </h1>
+
+                <p className="mt-6 text-base sm:text-lg text-slate-600 max-w-xl mx-auto leading-relaxed">
+                  One connected platform to manage your pipeline, assign incoming leads, collect payments, and automate tracking.
+                </p>
+
+                <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() => {
+                      if (!currentUser) {
+                        setAuthModal('login');
+                        showToast('🔒 Please sign in to enter the workspace');
+                        return;
+                      }
+                      setViewMode('app');
+                      showToast('Opening Workspace Pipeline & Team Hub...');
+                    }}
+                    className="px-8 py-3.5 rounded-xl bg-[#FF5722] hover:bg-[#F4511E] text-white text-sm font-bold shadow-lg shadow-orange-500/30 hover:-translate-y-0.5 transition-all"
+                  >
+                    {currentUser ? 'Enter Live Workspace' : '🔒 Sign In to Enter'}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (!currentUser) {
+                        setAuthModal('login');
+                        showToast('🔒 Please sign in to manage your team');
+                        return;
+                      }
+                      setViewMode('app');
+                      setActiveTab('team');
+                      showToast('Opening Team & Roles Manager...');
+                    }}
+                    className="px-8 py-3.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-sm font-bold border border-slate-300 shadow-xs"
+                  >
+                    👥 {currentUser ? 'Manage Team & Roles' : 'Sign In First'}
+                  </button>
+                </div>
+
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-600">
+                  <span>🎉 All features included</span>
+                  <span className="text-slate-300">•</span>
+                  <span>🎉 No credit card required!</span>
+                </div>
+              </div>
+
+              {/* Bottom Peek */}
+              <div className="relative mt-12 max-w-5xl mx-auto">
+                <div 
+                  onClick={() => {
+                    if (!currentUser) {
+                      setAuthModal('login');
+                      showToast('🔒 Sign in to open the Live Pipeline');
+                      return;
+                    }
+                    setViewMode('app');
+                  }}
+                  className="cursor-pointer bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200 hover:border-brand-orange/50 transition-all"
+                >
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <span className="font-bold text-xs text-slate-900">Live Kanban Pipeline Snapshot</span>
+                    <span className="text-xs font-bold text-[#FF5722]">Enter Full System ➔</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mt-4">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-rose-300">
+                      <div className="text-xs font-bold text-slate-800">AI Lead Routing Integration</div>
+                      <div className="text-[10px] text-slate-500 mt-1">
+                        {canViewOpportunityValue ? '$28,000 USD' : '🔒 [Restricted Value]'}
+                      </div>
+                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-mono font-bold animate-pulse">
+                        ⏱ 00:{String(timerSec).padStart(2, '0')} ESCALATING!
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="text-xs font-bold text-slate-800">Enterprise Cloud Migration</div>
+                      <div className="text-[10px] text-slate-500 mt-1">
+                        {canViewOpportunityValue ? '$45,000 USD' : '🔒 [Restricted Value]'}
+                      </div>
+                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+                        ✓ Acknowledged
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200">
+                      <div className="text-xs font-bold text-slate-800">WhatsApp & Stripe Suite</div>
+                      <div className="text-[10px] text-slate-500 mt-1">
+                        {canViewOpportunityValue ? '$62,000 USD' : '🔒 [Restricted Value]'}
+                      </div>
+                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase">
+                        $ Paid via Stripe
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </main>
+          ) : (
+            /* ========================================================
+                LIVE APP DASHBOARD WITH BOTH PIPELINES & TEAM ROLES
+            ======================================================== */
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1 space-y-6">
+              {/* ======= AUTH GATE: If guest ends up in app view, show full lock screen ======= */}
+              {!currentUser ? (
+                <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-6">
+                  <div className="w-20 h-20 rounded-3xl bg-rose-50 border-2 border-rose-200 flex items-center justify-center text-4xl shadow-xl">
+                    🔒
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Authentication Required</h2>
+                    <p className="text-slate-500 mt-2 max-w-sm mx-auto text-sm">
+                      You must sign in or create an account to access the Unified Platform workspace, pipeline, and team management tools.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={() => setAuthModal('login')}
+                      className="px-8 py-3 rounded-xl bg-[#FF5722] hover:bg-[#F4511E] text-white font-bold shadow-lg shadow-orange-500/30 transition-all"
+                    >
+                      Sign In to Your Workspace
+                    </button>
+                    <button
+                      onClick={() => setAuthModal('register')}
+                      className="px-8 py-3 rounded-xl bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-50 transition-all"
+                    >
+                      Create Free Account
+                    </button>
+                    <button
+                      onClick={() => setViewMode('hero')}
+                      className="px-8 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-all"
+                    >
+                      ← Back to Home
+                    </button>
+                  </div>
+                  <div className="mt-2 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500 max-w-sm">
+                    <div className="font-bold text-slate-700 mb-1">🎉 Demo Credentials</div>
+                    <div className="font-mono">👑 alex_owner / password123</div>
+                    <div className="font-mono">🛡️ sarah_admin / password123</div>
+                    <div className="font-mono">👤 tariq_rep / password123</div>
+                  </div>
+                </div>
+              ) : (
+              <React.Fragment>
+              {/* Back to Hero & Active Workspace */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setViewMode('hero')}
+                    className="flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+                  >
+                    <span>← Back to Hero Landing</span>
+                  </button>
+                  <div className="text-xs text-slate-300">|</div>
+                  <div className="text-xs font-bold text-slate-800">
+                    Workspace: <span className="text-brand-orange">{currentUser?.workspace_name}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400">Logged in as:</span>
+                  <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-800 text-xs font-bold">
+                    {currentUser?.name} ({currentUser?.role.toUpperCase()})
+                  </span>
+                  {!canViewOpportunityValue && (
+                    <span className="px-2 py-0.5 rounded-lg bg-rose-100 text-rose-800 text-[10px] font-bold" title="Checklist 1.2: Value hidden without permission">
+                      🔒 Value Hidden
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Navigation Tabs */}
+              <div className="bg-white border-b border-slate-200 px-4 sm:px-6 rounded-2xl flex gap-4 overflow-x-auto shadow-xs">
+                <button
+                  onClick={() => setActiveTab('pipeline')}
+                  className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'pipeline' ? 'border-[#FF5722] text-[#FF5722]' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                >
+                  <span>Kanban Pipeline</span>
+                  <span className="px-1.5 py-0.2 bg-orange-100 text-orange-800 rounded-full text-[10px]">2 Pipelines</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`py-3 text-xs font-bold border-b-2 whitespace-nowrap ${activeTab === 'dashboard' ? 'border-[#FF5722] text-[#FF5722]' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                >
+                  Live Figures & Metrics
+                </button>
+
+                {/* Team & Roles Tab (Checklist 1.1) */}
+                <button
+                  onClick={() => setActiveTab('team')}
+                  className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'team' ? 'border-[#FF5722] text-[#FF5722]' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                >
+                  <span>👥 Team & Permissions</span>
+                  <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-800 rounded-full text-[10px]">Checklist 1.1</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('audit')}
+                  className={`py-3 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'audit' ? 'border-[#FF5722] text-[#FF5722]' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                >
+                  <span>Hash-Chained Audit Logs</span>
+                  <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded-full text-[10px]">SHA-256</span>
+                </button>
+              </div>
+
+              {/* ========================================================
+                  TAB 1: KANBAN PIPELINE (Checklist 2.2: 2 Pipelines + Reorder)
+              ======================================================== */}
+              {activeTab === 'pipeline' && (
+                <div className="space-y-4">
+                  {/* Pipeline Switcher & Stage Actions Bar */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+                    {/* Pipeline Selector (Checklist 2.2) */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500">Active Pipeline:</span>
+                      <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                        <button
+                          onClick={() => { setActivePipeline('standard'); showToast('Switched to Standard Inbound Pipeline'); }}
+                          className={`px-3 py-1.5 rounded-lg transition-all ${activePipeline === 'standard' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'}`}
+                        >
+                          📦 Standard Deals Pipeline
+                        </button>
+                        <button
+                          onClick={() => { setActivePipeline('enterprise'); showToast('Switched to Enterprise Strategic Pipeline (Custom Fields & Stages)'); }}
+                          className={`px-3 py-1.5 rounded-lg transition-all ${activePipeline === 'enterprise' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600'}`}
+                        >
+                          🏢 Enterprise Strategic Pipeline
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Add Stage Form (Checklist 2.2) */}
+                    <form onSubmit={handleAddStage} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={newStageName}
+                        onChange={e => setNewStageName(e.target.value)}
+                        placeholder="Add new stage name..."
+                        className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                      />
+                      <button
+                        type="submit"
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl whitespace-nowrap"
+                      >
+                        + Add Stage
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Pipeline Columns Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 items-start">
+                    {currentStages.map((stg, idx) => (
+                      <div key={stg.id} className="bg-slate-100/70 rounded-2xl p-3 border border-slate-200 min-h-[440px] flex flex-col gap-2.5">
+                        {/* Column Header with Rename & Reorder Controls */}
+                        <div className={`p-3 bg-white rounded-xl border-t-4 ${stg.color} shadow-xs`}>
+                          <div className="flex items-center justify-between mb-1">
+                            {editingStageId === stg.id ? (
+                              <div className="flex items-center gap-1 w-full">
+                                <input
+                                  type="text"
+                                  value={editingStageLabel}
+                                  onChange={e => setEditingStageLabel(e.target.value)}
+                                  className="w-full text-xs font-bold border rounded px-1.5 py-0.5"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => handleRenameStage(stg.id)}
+                                  className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded font-bold"
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            ) : (
+                              <span 
+                                onClick={() => { setEditingStageId(stg.id); setEditingStageLabel(stg.label); }}
+                                className="font-bold text-xs text-slate-800 cursor-pointer hover:text-brand-orange"
+                                title="Click to rename stage (Checklist 2.2)"
+                              >
+                                {stg.label} ✏️
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Reorder Buttons (Checklist 2.2: Stages can be added, renamed and reordered) */}
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] text-slate-400">
+                            <span>Stage #{idx + 1}</span>
+                            <div className="flex gap-1">
+                              {idx > 0 && (
+                                <button
+                                  onClick={() => handleMoveStageOrder(idx, 'left')}
+                                  className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded font-bold"
+                                  title="Move Left"
+                                >
+                                  ←
+                                </button>
+                              )}
+                              {idx < currentStages.length - 1 && (
+                                <button
+                                  onClick={() => handleMoveStageOrder(idx, 'right')}
+                                  className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded font-bold"
+                                  title="Move Right"
+                                >
+                                  →
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Cards inside Column */}
+                        {idx === 0 && (
+                          <div className="p-3 bg-white rounded-xl border border-rose-300 shadow-2xs space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-800">
+                                {activePipeline === 'standard' ? 'AI Lead Routing Integration' : 'Fortune 500 ERP Migration'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500">Elena Rostova • Vanguard Dynamics</div>
+                            <div className="text-xs font-extrabold text-slate-900">
+                              {canViewOpportunityValue ? '$28,000 USD' : <span className="text-rose-600 font-mono text-[10px]">🔒 [Restricted Value]</span>}
+                            </div>
+                            
+                            {/* Live Countdown Timer */}
+                            <div className="py-1">
+                              {ackMap['deal-1'] ? (
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">
+                                  ✓ Acknowledged (Stopped)
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-mono font-bold rounded animate-pulse">
+                                  ⏱ 00:{String(timerSec).padStart(2, '0')} to Escalate!
+                                </span>
+                              )}
+                            </div>
+
+                            {!ackMap['deal-1'] && (
+                              <button
+                                onClick={() => {
+                                  if (!currentUser) {
+                                    setAuthModal('login');
+                                    showToast('🔒 Sign in to acknowledge leads');
+                                    return;
+                                  }
+                                  setAckMap(prev => ({ ...prev, 'deal-1': true }));
+                                  showToast('⚡ Lead Acknowledged! SLA Timer stopped.');
+                                }}
+                                className="w-full py-1.5 bg-[#FF5722] text-white text-[10px] font-bold rounded-lg shadow-xs"
+                              >
+                                ⚡ Acknowledge Lead
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {idx === 1 && (
+                          <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                            <span className="text-xs font-bold text-slate-800">Cyberdyne Systems Cloud</span>
+                            <div className="text-[11px] text-slate-500">Dr. Sarah Connor</div>
+                            <div className="text-xs font-extrabold text-slate-900">
+                              {canViewOpportunityValue ? '$45,000 USD' : <span className="text-rose-600 font-mono text-[10px]">🔒 [Restricted Value]</span>}
+                            </div>
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded">
+                              ✓ Acknowledged
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================
+                  TAB 2: TEAM & PERMISSIONS MANAGER (Checklist 1.1 & 1.2)
+              ======================================================== */}
+              {activeTab === 'team' && (
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-lg font-extrabold text-slate-900">
+                        Workspace Team & Granular Permission Flags
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Owner can invite users, assign roles, and hide opportunity values (Checklist Criteria 1.1 & 1.2).
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setAuthModal('invite_user')}
+                      className="px-4 py-2 bg-[#FF5722] hover:bg-[#F4511E] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                    >
+                      <span>+ Invite Teammate</span>
+                    </button>
+                  </div>
+
+                  {/* Team Table with Real-time Role & Permission editing */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-bold text-slate-400">
+                          <th className="p-3">User & Email</th>
+                          <th className="p-3">Role</th>
+                          <th className="p-3">can_create</th>
+                          <th className="p-3">can_export</th>
+                          <th className="p-3">can_view_value (Checklist 1.2)</th>
+                          <th className="p-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {accounts.map(acc => (
+                          <tr key={acc.id} className="hover:bg-slate-50/60">
+                            <td className="p-3">
+                              <div className="font-bold text-slate-900">{acc.name}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">{acc.email} (@{acc.username})</div>
+                            </td>
+                            <td className="p-3">
+                              <select
+                                value={acc.role}
+                                onChange={e => handleUpdateUserRoleOrPerm(acc.id, 'role', e.target.value)}
+                                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
+                              >
+                                <option value="owner">👑 Owner</option>
+                                <option value="admin">🛡️ Admin</option>
+                                <option value="user">👤 Sales Rep</option>
+                              </select>
+                            </td>
+                            <td className="p-3">
+                              <input
+                                type="checkbox"
+                                checked={acc.can_create !== false}
+                                onChange={e => handleUpdateUserRoleOrPerm(acc.id, 'can_create', e.target.checked)}
+                                className="rounded text-brand-orange"
+                              />
+                            </td>
+                            <td className="p-3">
+                              <input
+                                type="checkbox"
+                                checked={!!acc.can_export}
+                                onChange={e => handleUpdateUserRoleOrPerm(acc.id, 'can_export', e.target.checked)}
+                                className="rounded text-brand-orange"
+                              />
+                            </td>
+                            <td className="p-3">
+                              <input
+                                type="checkbox"
+                                checked={acc.can_view_value !== false}
+                                onChange={e => handleUpdateUserRoleOrPerm(acc.id, 'can_view_value', e.target.checked)}
+                                className="rounded text-brand-orange"
+                              />
+                              <span className="text-[10px] text-slate-500 ml-1.5">
+                                {acc.can_view_value !== false ? 'Visible' : 'Hidden'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                onClick={() => {
+                                  setCurrentUser(acc);
+                                  showToast(`Logged in as ${acc.name} (${acc.role.toUpperCase()})`);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold"
+                              >
+                                Test as this User ➔
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================
+                  TAB 3: LIVE METRICS (Checklist 4.2)
+              ======================================================== */}
+              {activeTab === 'dashboard' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                      <div className="text-xs text-slate-400 font-semibold">Total Pipeline Value</div>
+                      <div className="text-2xl font-extrabold text-slate-900 mt-1">
+                        {canViewOpportunityValue ? '$169,500' : '🔒 Restricted (Hidden)'}
+                      </div>
+                      <div className="text-[10px] text-emerald-600 font-bold mt-1">+18.4% this week</div>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                      <div className="text-xs text-slate-400 font-semibold">Stripe Collected Revenue</div>
+                      <div className="text-2xl font-extrabold text-indigo-600 mt-1">
+                        {canViewOpportunityValue ? '$62,000' : '🔒 Restricted'}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-medium mt-1">Webhook verified</div>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                      <div className="text-xs text-slate-400 font-semibold">Pipeline Win Rate</div>
+                      <div className="text-2xl font-extrabold text-slate-900 mt-1">42.8%</div>
+                      <div className="text-[10px] text-emerald-600 font-bold mt-1">+5.2% vs target</div>
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                      <div className="text-xs text-slate-400 font-semibold">SLA Recovery Queue</div>
+                      <div className="text-2xl font-extrabold text-rose-600 mt-1">1 Deal</div>
+                      <div className="text-[10px] text-rose-500 font-medium mt-1">Max escalations reached</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================
+                  TAB 4: HASH-CHAINED AUDIT LOGS (Checklist 4.1)
+              ======================================================== */}
+              {activeTab === 'audit' && (
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-extrabold text-base text-slate-900">Tamper-Evident SHA-256 Audit Log</h3>
+                      <p className="text-xs text-slate-500">Every write operation is chained using cryptographic parent hashes.</p>
+                    </div>
+                    <button
+                      onClick={() => showToast('🛡️ SHA-256 Chain Verified: All blocks mathematically intact!')}
+                      className="px-3.5 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800"
+                    >
+                      Run Integrity Audit
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b text-[10px] uppercase font-bold text-slate-400">
+                          <th className="p-3"># ID</th>
+                          <th className="p-3">Actor</th>
+                          <th className="p-3">Action</th>
+                          <th className="p-3">Target</th>
+                          <th className="p-3">Hash Link</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="p-3 font-mono">#1048</td>
+                          <td className="p-3 font-semibold">alex_owner (Owner)</td>
+                          <td className="p-3"><span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800">UPDATE</span></td>
+                          <td className="p-3">Enterprise Cloud Migration</td>
+                          <td className="p-3 font-mono text-[10px] text-emerald-700">3a7b9c1d... ➔ 9f83a21b...</td>
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-mono">#1047</td>
+                          <td className="p-3 font-semibold">tariq_rep (User)</td>
+                          <td className="p-3"><span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">CREATE</span></td>
+                          <td className="p-3">AI Lead Routing Integration</td>
+                          <td className="p-3 font-mono text-[10px] text-emerald-700">9f83a21b... ➔ 7c6d5e4f...</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

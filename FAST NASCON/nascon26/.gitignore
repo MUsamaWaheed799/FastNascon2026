@@ -1,0 +1,10 @@
+# Python / Django
+.venv/
+__pycache__/
+*.pyc
+db.sqlite3
+staticfiles/
+.env
+
+# Celery beat
+celerybeat-schedule*
